@@ -1,0 +1,54 @@
+
+# Tiny Tokeniser
+
+Tiny, language-agnostic tokeniser
+
+## Description
+
+A trivial tokeniser for simple languages or DSLs.
+
+Supports the following tokens:
+
+* Newline
+* Eof
+* Dot (`.`)
+* Comma (`,`)
+* Colon (`:`)
+* Semicolon (`;`)
+* Lparan (`(`) and Rparan (`)`)
+* Identifier
+* Numeric literal
+* String literal
+
+## Installation
+
+`zig fetch --save git+https://github.com/QSmally/TinyTokeniser`
+
+```zig
+const tinytokeniser = b.dependency("tinytokeniser", .{ ... });
+exec.root_module.addImport("tinytokeniser", tinytokeniser.module("tinytokeniser"));
+// ...
+```
+
+```zig
+const TinyTokeniser = @import("tinytokeniser");
+
+const tokeniser = TinyTokeniser.init(
+    \\set window(3840, 2160) "foo"
+);
+
+tokeniser.next(); // .identifier
+tokeniser.next(); // .identifier
+tokeniser.next(); // .l_paran
+tokeniser.next(); // .integer_literal
+tokeniser.next(); // .comma
+tokeniser.next(); // .integer_literal
+tokeniser.next(); // .r_paran
+tokeniser.next(); // .string_literal
+tokeniser.next(); // .eof
+```
+
+Commit HEAD compiled with Zig `0.14.1`.
+
+I bashed this out of my [`QSmally/QCPU-CLI`](https://github.com/QSmally/QCPU-CLI) language for
+common use.

@@ -1,0 +1,239 @@
+
+const Tokeniser = @This();
+
+buffer: [:0]const u8,
+cursor: usize = 0,
+
+pub fn init(buffer_: [:0]const u8) Tokeniser {
+    return .{ .buffer = buffer_ };
+}
+
+pub const Token = @import("Token.zig");
+
+pub fn is_eof(self: *Tokeniser) bool {
+    return self.cursor == self.buffer.len;
+}
+
+const State = enum {
+    start,
+    invalid,
+    identifier,
+    numeric_literal,
+    string_literal
+};
+
+pub fn next(self: *Tokeniser) Token {
+    var result: Token = .{
+        .tag = undefined,
+        .location = .{
+            .start = self.cursor,
+            .end = undefined } };
+    var helper = Helper.init(self, &result);
+
+    state: switch (State.start) {
+        .start => switch (helper.current()) {
+            0 => if (self.is_eof())
+                helper.tag(.eof) else
+                helper.tag_next(.unexpected_eof),
+
+            ' ', '\t', '\r' => {
+                helper.discard();
+                continue :state .start;
+            },
+
+            // single character tags
+            '\n' => helper.tag_next(.newline),
+            '(' => helper.tag_next(.l_paran),
+            ')' => helper.tag_next(.r_paran),
+            ',' => helper.tag_next(.comma),
+            '.' => helper.tag_next(.dot),
+            ';' => helper.tag_next(.semicolon),
+            ':' => helper.tag_next(.colon),
+
+            // beginning of tags
+            'a'...'z', 'A'...'Z', '_' => continue :state .identifier,
+            '0'...'9' => continue :state .numeric_literal,
+            '"' => continue :state .string_literal,
+
+            else => continue :state .invalid
+        },
+
+        // Mark current token as invalid until a barrier character, after which
+        // the tokeniser can continue (either providing as many errors to the
+        // user, or abort the process).
+        //
+        // A barrier character is a universal list, including:
+        // - eof/newlines/spaces
+        // - parenthesis
+        // - dots/commas/(semi)colons
+        .invalid => switch (helper.next()) {
+            0, '\n', ' ', '(', ')', '.', ',', ':', ';' => helper.tag_lookahead(.invalid),
+            else => continue :state .invalid
+        },
+
+        // Tags any token starting with a-zA-Z_ and continuing with a-zA-Z0-9_
+        // as identifier, or if found, a (pseudo)instruction or builtin.
+        .identifier => switch (helper.next()) {
+            'a'...'z', 'A'...'Z', '0'...'9', '_'  => continue :state .identifier,
+            else => helper.tag_lookahead(.identifier)
+        },
+
+        // Any; decimal, hexadecimal. Further validation of the numeric literal
+        // is done at a later stage based on prefixing (like 0x and 0b).
+        .numeric_literal => switch (helper.next()) {
+            '0'...'9', 'A'...'F', 'x', 'b' => continue :state .numeric_literal,
+            0, '\n', ' ', '(', ')', '.', ',', ':', ';' => helper.tag_lookahead(.numeric_literal),
+            else => continue :state .invalid
+        },
+
+        // A string literal is just a range of characters. There's no null byte
+        // added automatically, which must be added by the programmer:
+        //  ascii 'foo bar' 0
+        //  ascii 'foo bar' 0x00
+        .string_literal => switch (helper.next()) {
+            '"' => helper.tag_next(.string_literal),
+            0 => helper.tag(.unexpected_eof),
+            '\n' => continue :state .invalid,
+            else => continue :state .string_literal
+        }
+    }
+
+    return result;
+}
+
+const Helper = struct {
+
+    tokeniser: *Tokeniser,
+    token: *Token,
+
+    pub fn init(tokeniser_: *Tokeniser, token_: *Token) Helper {
+        return .{
+            .tokeniser = tokeniser_,
+            .token = token_ };
+    }
+
+    pub inline fn current(self: *Helper) u8 {
+        return self.tokeniser.buffer[self.tokeniser.cursor];
+    }
+
+    pub inline fn next(self: *Helper) u8 {
+        self.tokeniser.cursor += 1;
+        return self.current();
+    }
+
+    pub inline fn tag(self: *Helper, tag_: Token.Tag) void {
+        self.token.tag = tag_;
+        self.token.location.end = self.tokeniser.cursor + 1;
+    }
+
+    pub inline fn tag_lookahead(self: *Helper, tag_: Token.Tag) void {
+        self.token.tag = tag_;
+        self.token.location.end = self.tokeniser.cursor;
+    }
+
+    pub inline fn tag_next(self: *Helper, tag_: Token.Tag) void {
+        self.tag(tag_);
+        self.tokeniser.cursor += 1;
+    }
+
+    pub inline fn discard(self: *Helper) void {
+        self.tokeniser.cursor += 1;
+        self.token.location.start = self.tokeniser.cursor;
+    }
+};
+
+// Tests
+
+const std = @import("std");
+
+const stderr = std.io
+    .getStdErr()
+    .writer();
+
+fn testTokenise(input: [:0]const u8, expected_tokens: []const Token.Tag) !void {
+    var tokeniser = Tokeniser.init(input);
+    for (expected_tokens) |expected_token|
+        try std.testing.expectEqual(expected_token, tokeniser.next().tag);
+}
+
+const SlicedToken = struct { Token.Tag, []const u8 };
+
+fn testTokeniseSlices(input: [:0]const u8, expected_slices: []const SlicedToken) !void {
+    var tokeniser = Tokeniser.init(input);
+
+    for (expected_slices) |expected_slice| {
+        const token = tokeniser.next();
+        try std.testing.expectEqual(expected_slice[0], token.tag);
+
+        // see tag:newline-comment
+        if (token.tag != .newline)
+            try std.testing.expectEqualSlices(u8, expected_slice[1], token.location.slice(input));
+    }
+}
+
+test "eof" {
+    try testTokenise("", &.{ .eof });
+    try testTokenise("   ", &.{ .eof });
+    try testTokenise("%", &.{ .invalid, .eof });
+    try testTokenise("\x00", &.{ .unexpected_eof, .eof });
+    try testTokenise("", &.{ .eof, .eof, .eof, .eof });
+}
+
+test "identifiers" {
+    try testTokenise("x", &.{ .identifier, .eof });
+    try testTokenise("x.", &.{ .identifier, .dot, .eof });
+    try testTokenise("x.y", &.{ .identifier, .dot, .identifier, .eof });
+    try testTokenise("x. y", &.{ .identifier, .dot, .identifier, .eof });
+    try testTokenise("x,y", &.{ .identifier, .comma, .identifier, .eof });
+    try testTokenise("x, y", &.{ .identifier, .comma, .identifier, .eof });
+    try testTokenise("  x", &.{ .identifier, .eof });
+}
+
+test "numeric literals" {
+    try testTokenise("6", &.{ .numeric_literal, .eof });
+    try testTokenise("666", &.{ .numeric_literal, .eof });
+    try testTokenise("0xFF", &.{ .numeric_literal, .eof });
+    try testTokenise("0b10101111", &.{ .numeric_literal, .eof });
+    try testTokenise("x0FF", &.{ .identifier, .eof });
+    try testTokenise("0xZZ", &.{ .invalid, .eof });
+
+    // enforce uppercase
+    try testTokenise("0xaa", &.{ .invalid, .eof });
+
+    // validated at a later stage
+    try testTokenise("0x", &.{ .numeric_literal, .eof });
+    try testTokenise("0xxx", &.{ .numeric_literal, .eof });
+    try testTokenise("5xbx", &.{ .numeric_literal, .eof });
+}
+
+test "string literals" {
+    try testTokenise(" \" foo bar \" ", &.{ .string_literal, .eof });
+    try testTokenise(" \" foo, bar, \" ", &.{ .string_literal, .eof });
+    try testTokenise("\" foo bar \" 0x00 ", &.{ .string_literal, .numeric_literal, .eof });
+    try testTokenise("\" foo bar ", &.{ .unexpected_eof, .eof });
+    try testTokenise("\" foo bar \n", &.{ .invalid, .eof });
+    try testTokenise("\" foo bar '", &.{ .unexpected_eof, .eof });
+}
+
+test "full fledge" {
+    try testTokeniseSlices(
+        \\set window(1920, 1080) "foo"
+        \\set attribute(.floating)
+    , &.{
+        .{ .identifier, "set" },
+        .{ .identifier, "window" },
+        .{ .l_paran, "(" },
+        .{ .numeric_literal, "1920" },
+        .{ .comma, "," },
+        .{ .numeric_literal, "1080" },
+        .{ .r_paran, ")" },
+        .{ .string_literal, "\"foo\"" },
+        .{ .newline, "" },
+        .{ .identifier, "set" },
+        .{ .identifier, "attribute" },
+        .{ .l_paran, "(" },
+        .{ .dot, "." },
+        .{ .identifier, "floating" },
+        .{ .r_paran, ")" },
+    });
+}
