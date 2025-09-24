@@ -43,12 +43,27 @@ pub fn next(self: *Tokeniser) Token {
 
             // single character tags
             '\n' => helper.tag_next(.newline),
+            '.' => helper.tag_next(.dot),
+            ',' => helper.tag_next(.comma),
+            ':' => helper.tag_next(.colon),
+            ';' => helper.tag_next(.semicolon),
             '(' => helper.tag_next(.l_paran),
             ')' => helper.tag_next(.r_paran),
-            ',' => helper.tag_next(.comma),
-            '.' => helper.tag_next(.dot),
-            ';' => helper.tag_next(.semicolon),
-            ':' => helper.tag_next(.colon),
+            '{' => helper.tag_next(.l_brace),
+            '}' => helper.tag_next(.r_brace),
+            '[' => helper.tag_next(.l_bracket),
+            ']' => helper.tag_next(.r_bracket),
+            '+' => helper.tag_next(.plus),
+            '-' => helper.tag_next(.minus),
+            '=' => helper.tag_next(.equals),
+            '!' => helper.tag_next(.bang),
+            '*' => helper.tag_next(.star),
+            '&' => helper.tag_next(.ampersand),
+            '^' => helper.tag_next(.caret),
+            '%' => helper.tag_next(.percent),
+            '|' => helper.tag_next(.bar),
+            '/' => helper.tag_next(.slash),
+            '~' => helper.tag_next(.tilde),
 
             // beginning of tags
             'a'...'z', 'A'...'Z', '_' => continue :state .identifier,
@@ -78,12 +93,12 @@ pub fn next(self: *Tokeniser) Token {
             else => helper.tag_lookahead(.identifier)
         },
 
-        // Any; decimal, hexadecimal. Further validation of the numeric literal
-        // is done at a later stage based on prefixing (like 0x and 0b).
+        // Any decimal, hexadecimal, or binary. Further validation of the
+        // numeric literal must be done at a later stage based on prefixing
+        // (like 0x and 0b).
         .numeric_literal => switch (helper.next()) {
             '0'...'9', 'A'...'F', 'x', 'b' => continue :state .numeric_literal,
-            0, '\n', ' ', '(', ')', '.', ',', ':', ';' => helper.tag_lookahead(.numeric_literal),
-            else => continue :state .invalid
+            else => helper.tag_lookahead(.numeric_literal)
         },
 
         // A string literal is just a range of characters. There's no null byte
@@ -174,9 +189,34 @@ fn testTokeniseSlices(input: [:0]const u8, expected_slices: []const SlicedToken)
 test "eof" {
     try testTokenise("", &.{ .eof });
     try testTokenise("   ", &.{ .eof });
-    try testTokenise("%", &.{ .invalid, .eof });
+    try testTokenise("$", &.{ .invalid, .eof });
     try testTokenise("\x00", &.{ .unexpected_eof, .eof });
     try testTokenise("", &.{ .eof, .eof, .eof, .eof });
+}
+
+test "invalid" {
+    try testTokenise("$", &.{ .invalid, .eof });
+    try testTokenise("$aaaa", &.{ .invalid, .eof });
+    try testTokenise("$+-", &.{ .invalid, .eof });
+    try testTokenise("$;+", &.{ .invalid, .semicolon, .plus, .eof });
+    try testTokenise("+$;+", &.{ .plus, .invalid, .semicolon, .plus, .eof });
+}
+
+test "single characters" {
+    try testTokenise("+", &.{ .plus, .eof });
+    try testTokenise("+-!", &.{ .plus, .minus, .bang, .eof });
+    try testTokenise("foo == bar", &.{ .identifier, .equals, .equals, .identifier, .eof });
+    try testTokenise("*=", &.{ .star, .equals, .eof });
+    try testTokenise("=something", &.{ .equals, .identifier, .eof });
+    // TODO: improve numeric parsing
+    // try testTokenise("=9hello", &.{ .equals, .invalid, .eof });
+    try testTokenise("=&hello", &.{ .equals, .ampersand, .identifier, .eof });
+    try testTokenise("=9&", &.{ .equals, .numeric_literal, .ampersand, .eof });
+    try testTokenise("^%", &.{ .caret, .percent, .eof });
+    try testTokenise("||", &.{ .bar, .bar, .eof });
+    try testTokenise("//0b00", &.{ .slash, .slash, .numeric_literal, .eof });
+    try testTokenise("0/5", &.{ .numeric_literal, .slash, .numeric_literal, .eof });
+    try testTokenise("~&foo", &.{ .tilde, .ampersand, .identifier, .eof });
 }
 
 test "identifiers" {
@@ -195,10 +235,6 @@ test "numeric literals" {
     try testTokenise("0xFF", &.{ .numeric_literal, .eof });
     try testTokenise("0b10101111", &.{ .numeric_literal, .eof });
     try testTokenise("x0FF", &.{ .identifier, .eof });
-    try testTokenise("0xZZ", &.{ .invalid, .eof });
-
-    // enforce uppercase
-    try testTokenise("0xaa", &.{ .invalid, .eof });
 
     // validated at a later stage
     try testTokenise("0x", &.{ .numeric_literal, .eof });

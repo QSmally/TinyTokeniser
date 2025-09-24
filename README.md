@@ -16,9 +16,22 @@ Supports the following tokens:
 * Colon (`:`)
 * Semicolon (`;`)
 * Lparan (`(`) and Rparan (`)`)
-* Identifier
-* Numeric literal
-* String literal
+* Lbrace (`{`) and Rbrace (`}`)
+* Lbracket (`[`) and Rbracket (`]`)
+* Plus (`+`)
+* Minus (`-`)
+* Equals (`=`)
+* Bang (`!`)
+* Star (`*`)
+* Ampersand (`&`)
+* Caret (`^`)
+* Percent (`%`)
+* Bar (`|`)
+* Slash (`/`)
+* Tilde (`~`)
+* Identifier (`a-zA-Z_` + `0-9`)
+* Numeric literal (`0-9` + [`0b` `0x`] + `0-9`)
+* String literal (`".*"`)
 
 ## Installation
 
@@ -40,9 +53,9 @@ const tokeniser = TinyTokeniser.init(
 tokeniser.next(); // .identifier
 tokeniser.next(); // .identifier
 tokeniser.next(); // .l_paran
-tokeniser.next(); // .integer_literal
+tokeniser.next(); // .numeric_literal
 tokeniser.next(); // .comma
-tokeniser.next(); // .integer_literal
+tokeniser.next(); // .numeric_literal
 tokeniser.next(); // .r_paran
 tokeniser.next(); // .string_literal
 tokeniser.next(); // .eof
