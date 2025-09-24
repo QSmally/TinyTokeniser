@@ -19,6 +19,8 @@ const State = enum {
     invalid,
     identifier,
     numeric_literal,
+    decimal_literal,
+    extended_numeric_literal,
     string_literal
 };
 
@@ -73,18 +75,12 @@ pub fn next(self: *Tokeniser) Token {
             else => continue :state .invalid
         },
 
-        // Mark current token as invalid until a barrier character, after which
-        // the tokeniser can continue (either providing as many errors to the
-        // user, or abort the process).
-        //
-        // A barrier character is a universal list, including:
-        // - eof/newlines/spaces
-        // - parenthesis
-        // - dots/commas/(semi)colons
-        .invalid => switch (helper.next()) {
-            0, '\n', ' ', '(', ')', '.', ',', ':', ';' => helper.tag_lookahead(.invalid),
-            else => continue :state .invalid
-        },
+        // Mark current token as invalid until a boundary character, after
+        // which the tokeniser can continue (either providing as many errors to
+        // the user, or abort the process).
+        .invalid => if (helper.is_next_boundary())
+            helper.tag_lookahead(.invalid) else
+            continue :state .invalid,
 
         // Tags any token starting with a-zA-Z_ and continuing with a-zA-Z0-9_
         // as identifier, or if found, a (pseudo)instruction or builtin.
@@ -93,11 +89,25 @@ pub fn next(self: *Tokeniser) Token {
             else => helper.tag_lookahead(.identifier)
         },
 
-        // Any decimal, hexadecimal, or binary. Further validation of the
-        // numeric literal must be done at a later stage based on prefixing
-        // (like 0x and 0b).
+        // Any decimal, binary, hexadecimal or octal notation.
         .numeric_literal => switch (helper.next()) {
-            '0'...'9', 'A'...'F', 'x', 'b' => continue :state .numeric_literal,
+            '0'...'9' => continue :state .decimal_literal,
+            'b', 'x', 'o' => continue :state .extended_numeric_literal,
+            '_', // separator _ is not parseable by std.fmt.parseInt()
+            'a', 'c'...'n', 'p'...'w', 'y'...'z', // a-z without b, x, o
+            'A'...'Z' => continue :state .invalid,
+            else => helper.tag_lookahead(.numeric_literal)
+        },
+
+        .decimal_literal => switch (helper.next()) {
+            '0'...'9' => continue :state .decimal_literal,
+            'a'...'z', 'A'...'Z', '_' => continue :state .invalid,
+            else => helper.tag_lookahead(.numeric_literal)
+        },
+
+        .extended_numeric_literal => switch (helper.next()) {
+            '0'...'9', 'A'...'Z' => continue :state .extended_numeric_literal,
+            'a'...'z', '_' => continue :state .invalid,
             else => helper.tag_lookahead(.numeric_literal)
         },
 
@@ -125,6 +135,17 @@ const Helper = struct {
         return .{
             .tokeniser = tokeniser_,
             .token = token_ };
+    }
+
+    pub inline fn is_next_boundary(self: *Helper) bool {
+        return switch (self.next()) {
+            0, '\n', '\t', '\r', ' ',
+            '.', ',', ':', ';',
+            '(', ')', '{', '}', '[', ']',
+            '+', '-', '=', '!', '*', '&', '^', '%', '|', '/', '~' => true,
+
+            else => false
+        };
     }
 
     pub inline fn current(self: *Helper) u8 {
@@ -197,7 +218,7 @@ test "eof" {
 test "invalid" {
     try testTokenise("$", &.{ .invalid, .eof });
     try testTokenise("$aaaa", &.{ .invalid, .eof });
-    try testTokenise("$+-", &.{ .invalid, .eof });
+    try testTokenise("$+-", &.{ .invalid, .plus, .minus, .eof });
     try testTokenise("$;+", &.{ .invalid, .semicolon, .plus, .eof });
     try testTokenise("+$;+", &.{ .plus, .invalid, .semicolon, .plus, .eof });
 }
@@ -208,8 +229,9 @@ test "single characters" {
     try testTokenise("foo == bar", &.{ .identifier, .equals, .equals, .identifier, .eof });
     try testTokenise("*=", &.{ .star, .equals, .eof });
     try testTokenise("=something", &.{ .equals, .identifier, .eof });
-    // TODO: improve numeric parsing
-    // try testTokenise("=9hello", &.{ .equals, .invalid, .eof });
+    try testTokenise("=9hello", &.{ .equals, .invalid, .eof });
+    try testTokenise("=9xhello", &.{ .equals, .invalid, .eof });
+    try testTokenise("=9x=hello", &.{ .equals, .numeric_literal, .equals, .identifier, .eof });
     try testTokenise("=&hello", &.{ .equals, .ampersand, .identifier, .eof });
     try testTokenise("=9&", &.{ .equals, .numeric_literal, .ampersand, .eof });
     try testTokenise("^%", &.{ .caret, .percent, .eof });
@@ -234,12 +256,13 @@ test "numeric literals" {
     try testTokenise("666", &.{ .numeric_literal, .eof });
     try testTokenise("0xFF", &.{ .numeric_literal, .eof });
     try testTokenise("0b10101111", &.{ .numeric_literal, .eof });
+    try testTokenise("0x69", &.{ .numeric_literal, .eof });
     try testTokenise("x0FF", &.{ .identifier, .eof });
-
-    // validated at a later stage
-    try testTokenise("0x", &.{ .numeric_literal, .eof });
-    try testTokenise("0xxx", &.{ .numeric_literal, .eof });
-    try testTokenise("5xbx", &.{ .numeric_literal, .eof });
+    try testTokenise("0x", &.{ .numeric_literal, .eof }); // TODO: fix
+    try testTokenise("5x", &.{ .numeric_literal, .eof }); // TODO: fix
+    try testTokenise("5x0", &.{ .numeric_literal, .eof }); // TODO: fix
+    try testTokenise("0xxx", &.{ .invalid, .eof });
+    try testTokenise("5xbx", &.{ .invalid, .eof });
 }
 
 test "string literals" {

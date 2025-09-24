@@ -29,9 +29,9 @@ Supports the following tokens:
 * Bar (`|`)
 * Slash (`/`)
 * Tilde (`~`)
-* Identifier (`a-zA-Z_` + `0-9`)
-* Numeric literal (`0-9` + [`0b` `0x`] + `0-9`)
-* String literal (`".*"`)
+* Identifier
+* Numeric literal
+* String literal
 
 ## Installation
 
