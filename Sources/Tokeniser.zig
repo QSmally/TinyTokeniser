@@ -111,10 +111,7 @@ pub fn next(self: *Tokeniser) Token {
             else => helper.tag_lookahead(.numeric_literal)
         },
 
-        // A string literal is just a range of characters. There's no null byte
-        // added automatically, which must be added by the programmer:
-        //  ascii 'foo bar' 0
-        //  ascii 'foo bar' 0x00
+        // A string literal is just a range of characters.
         .string_literal => switch (helper.next()) {
             '"' => helper.tag_next(.string_literal),
             0 => helper.tag(.unexpected_eof),
@@ -131,10 +128,10 @@ const Helper = struct {
     tokeniser: *Tokeniser,
     token: *Token,
 
-    pub fn init(tokeniser_: *Tokeniser, token_: *Token) Helper {
+    pub fn init(tokeniser: *Tokeniser, token: *Token) Helper {
         return .{
-            .tokeniser = tokeniser_,
-            .token = token_ };
+            .tokeniser = tokeniser,
+            .token = token };
     }
 
     pub inline fn is_next_boundary(self: *Helper) bool {
@@ -182,10 +179,6 @@ const Helper = struct {
 
 const std = @import("std");
 
-const stderr = std.io
-    .getStdErr()
-    .writer();
-
 fn testTokenise(input: [:0]const u8, expected_tokens: []const Token.Tag) !void {
     var tokeniser = Tokeniser.init(input);
     for (expected_tokens) |expected_token|
@@ -200,10 +193,7 @@ fn testTokeniseSlices(input: [:0]const u8, expected_slices: []const SlicedToken)
     for (expected_slices) |expected_slice| {
         const token = tokeniser.next();
         try std.testing.expectEqual(expected_slice[0], token.tag);
-
-        // see tag:newline-comment
-        if (token.tag != .newline)
-            try std.testing.expectEqualSlices(u8, expected_slice[1], token.location.slice(input));
+        if (token.tag != .newline) try std.testing.expectEqualSlices(u8, expected_slice[1], token.location.slice(input));
     }
 }
 
@@ -263,12 +253,15 @@ test "numeric literals" {
     try testTokenise("5x0", &.{ .numeric_literal, .eof }); // TODO: fix
     try testTokenise("0xxx", &.{ .invalid, .eof });
     try testTokenise("5xbx", &.{ .invalid, .eof });
+    try testTokenise("50x", &.{ .invalid, .eof });
+    try testTokenise("00A", &.{ .invalid, .eof });
 }
 
 test "string literals" {
     try testTokenise(" \" foo bar \" ", &.{ .string_literal, .eof });
     try testTokenise(" \" foo, bar, \" ", &.{ .string_literal, .eof });
-    try testTokenise("\" foo bar \" 0x00 ", &.{ .string_literal, .numeric_literal, .eof });
+    try testTokenise("\"hello world!\" 0x00 ", &.{ .string_literal, .numeric_literal, .eof });
+    try testTokenise("\"0 && bar\"", &.{ .string_literal, .eof });
     try testTokenise("\" foo bar ", &.{ .unexpected_eof, .eof });
     try testTokenise("\" foo bar \n", &.{ .invalid, .eof });
     try testTokenise("\" foo bar '", &.{ .unexpected_eof, .eof });
