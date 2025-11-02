@@ -45,8 +45,8 @@ pub const Location = struct {
         return self.start == location.start and self.end == location.end;
     }
 
-    pub fn slice(self: Location, from_buffer: [:0]const u8) []const u8 {
-        return from_buffer[self.start..self.end];
+    pub fn slice(self: Location, buffer: [:0]const u8) []const u8 {
+        return buffer[self.start..self.end];
     }
 };
 

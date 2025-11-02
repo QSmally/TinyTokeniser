@@ -45,20 +45,21 @@ exec.root_module.addImport("tinytokeniser", tinytokeniser.module("tinytokeniser"
 
 ```zig
 const TinyTokeniser = @import("tinytokeniser");
+const Tag = TinyTokeniser.Token.Tag;
 
-const tokeniser = TinyTokeniser.init(
+var tokeniser = TinyTokeniser.init(
     \\set window(3840, 2160) "foo"
 );
 
-tokeniser.next(); // .identifier
-tokeniser.next(); // .identifier
-tokeniser.next(); // .l_paran
-tokeniser.next(); // .numeric_literal
-tokeniser.next(); // .comma
-tokeniser.next(); // .numeric_literal
-tokeniser.next(); // .r_paran
-tokeniser.next(); // .string_literal
-tokeniser.next(); // .eof
+try std.testing.expectEqual(Tag.identifier, tokeniser.next().tag);
+try std.testing.expectEqual(Tag.identifier, tokeniser.next().tag);
+try std.testing.expectEqual(Tag.l_paran, tokeniser.next().tag);
+try std.testing.expectEqual(Tag.numeric_literal, tokeniser.next().tag);
+try std.testing.expectEqual(Tag.comma, tokeniser.next().tag);
+try std.testing.expectEqual(Tag.numeric_literal, tokeniser.next().tag);
+try std.testing.expectEqual(Tag.r_paran, tokeniser.next().tag);
+try std.testing.expectEqual(Tag.string_literal, tokeniser.next().tag);
+try std.testing.expectEqual(Tag.eof, tokeniser.next().tag);
 ```
 
 Commit HEAD compiled with Zig `0.14.1`.

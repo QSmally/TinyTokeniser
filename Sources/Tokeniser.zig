@@ -154,18 +154,18 @@ const Helper = struct {
         return self.current();
     }
 
-    pub inline fn tag(self: *Helper, tag_: Token.Tag) void {
-        self.token.tag = tag_;
+    pub inline fn tag(self: *Helper, tagged: Token.Tag) void {
+        self.token.tag = tagged;
         self.token.location.end = self.tokeniser.cursor + 1;
     }
 
-    pub inline fn tag_lookahead(self: *Helper, tag_: Token.Tag) void {
-        self.token.tag = tag_;
+    pub inline fn tag_lookahead(self: *Helper, tagged: Token.Tag) void {
+        self.token.tag = tagged;
         self.token.location.end = self.tokeniser.cursor;
     }
 
-    pub inline fn tag_next(self: *Helper, tag_: Token.Tag) void {
-        self.tag(tag_);
+    pub inline fn tag_next(self: *Helper, tagged: Token.Tag) void {
+        self.tag(tagged);
         self.tokeniser.cursor += 1;
     }
 
@@ -288,4 +288,20 @@ test "full fledge" {
         .{ .identifier, "floating" },
         .{ .r_paran, ")" },
     });
+}
+
+test "example" {
+    var tokeniser = Tokeniser.init(
+        \\set window(3840, 2160) "foo"
+    );
+
+    try std.testing.expectEqual(Token.Tag.identifier, tokeniser.next().tag);
+    try std.testing.expectEqual(Token.Tag.identifier, tokeniser.next().tag);
+    try std.testing.expectEqual(Token.Tag.l_paran, tokeniser.next().tag);
+    try std.testing.expectEqual(Token.Tag.numeric_literal, tokeniser.next().tag);
+    try std.testing.expectEqual(Token.Tag.comma, tokeniser.next().tag);
+    try std.testing.expectEqual(Token.Tag.numeric_literal, tokeniser.next().tag);
+    try std.testing.expectEqual(Token.Tag.r_paran, tokeniser.next().tag);
+    try std.testing.expectEqual(Token.Tag.string_literal, tokeniser.next().tag);
+    try std.testing.expectEqual(Token.Tag.eof, tokeniser.next().tag);
 }
