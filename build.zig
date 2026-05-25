@@ -5,7 +5,7 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const root_module = b.createModule(.{
+    const root_module = b.addModule("tinytokeniser", .{
         .root_source_file = b.path("Sources/Tokeniser.zig"),
         .target = target,
         .optimize = optimize });
