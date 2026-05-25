@@ -47,22 +47,24 @@ exec.root_module.addImport("tinytokeniser", tinytokeniser.module("tinytokeniser"
 const TinyTokeniser = @import("tinytokeniser");
 const Tag = TinyTokeniser.Token.Tag;
 
-var tokeniser = TinyTokeniser.init(
-    \\set window(3840, 2160) "foo"
-);
+test TinyTokeniser {
+    var tokeniser = TinyTokeniser.init(
+        \\set window(3840, 2160) "foo"
+    );
 
-try std.testing.expectEqual(Tag.identifier, tokeniser.next().tag);
-try std.testing.expectEqual(Tag.identifier, tokeniser.next().tag);
-try std.testing.expectEqual(Tag.l_paran, tokeniser.next().tag);
-try std.testing.expectEqual(Tag.numeric_literal, tokeniser.next().tag);
-try std.testing.expectEqual(Tag.comma, tokeniser.next().tag);
-try std.testing.expectEqual(Tag.numeric_literal, tokeniser.next().tag);
-try std.testing.expectEqual(Tag.r_paran, tokeniser.next().tag);
-try std.testing.expectEqual(Tag.string_literal, tokeniser.next().tag);
-try std.testing.expectEqual(Tag.eof, tokeniser.next().tag);
+    try std.testing.expectEqual(Tag.identifier, tokeniser.next().tag);
+    try std.testing.expectEqual(Tag.identifier, tokeniser.next().tag);
+    try std.testing.expectEqual(Tag.l_paran, tokeniser.next().tag);
+    try std.testing.expectEqual(Tag.numeric_literal, tokeniser.next().tag);
+    try std.testing.expectEqual(Tag.comma, tokeniser.next().tag);
+    try std.testing.expectEqual(Tag.numeric_literal, tokeniser.next().tag);
+    try std.testing.expectEqual(Tag.r_paran, tokeniser.next().tag);
+    try std.testing.expectEqual(Tag.string_literal, tokeniser.next().tag);
+    try std.testing.expectEqual(Tag.eof, tokeniser.next().tag);
+}
 ```
 
-Commit HEAD compiled with Zig `0.14.1`.
+Zig `0.16.0` is used.
 
 I bashed this out of my [`QSmally/QCPU-CLI`](https://github.com/QSmally/QCPU-CLI) language for
 common use.
